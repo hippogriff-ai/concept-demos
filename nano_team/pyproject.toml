@@ -1,0 +1,11 @@
+[project]
+name = "nano-team"
+version = "0.1.0"
+description = "Minimal agent team demo — 3 Claude agents communicating via filesystem mailboxes"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk>=0.1.50",
+]
+
+[dependency-groups]
+dev = []
