@@ -1,6 +1,6 @@
 # nano_team
 
-A minimal reimplementation of [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) using the Claude Agent SDK. Four Claude agents (1 lead + 2 debaters + 1 judge) communicate through filesystem mailboxes — the same architecture real Claude Code teams use.
+A from-scratch exploration of Claude Code's agent team architecture — filesystem mailboxes, prompt-only routing, LLM orchestration
 
 ## What this demonstrates
 
