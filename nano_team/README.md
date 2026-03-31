@@ -188,9 +188,9 @@ output/                                      Mirrors ~/.claude/teams/{name}/
     ├── 2.json ... 10.json               Sub-tasks (created by teammates)
 ```
 
-### How it maps to real Claude Code teams
+### How it maps to real Claude Code teams (educated guess)
 
-| Claude Code teams | nano_team |
+| Claude Code teams (from observation) | nano_team |
 |---|---|
 | Lead calls `Agent` tool → spawns OS process | Lead calls `spawn_teammate` → starts background `ClaudeSDKClient` |
 | `SendMessage(to, message)` for all communication | `send_message(recipient, text, summary, message_type)` |
