@@ -56,6 +56,15 @@ The trace shows every filesystem operation as it happens:
 
 The demo writes to `nano_team/output/`. Open that folder in your IDE sidebar — files appear and update in real-time as agents communicate.
 
+Here's what the final state looks like. All four inbox files open, the full debate trail visible, shutdown requests and responses in lead.json, forensic audit in the terminal:
+
+![VS Code after a complete run: four inbox files showing the debate, shutdown flow, and forensic audit with zero routing breaches](docs/nano-team-shutdown.png)
+
+### Demo videos
+
+- [3-agent run (~2 min)](https://youtu.be/LASbM6fcdbI) — lead judges directly, no routing constraint
+- [4-agent run (~4 min)](https://youtu.be/v5pETaNlpEA) — judge added to test prompt-only routing. Routing held, but the extra agent doubled the time.
+
 ### After the run
 
 Inspect the filesystem artifacts:
@@ -138,7 +147,7 @@ sequenceDiagram
     participant J as Judge
 
     Note over L: Setup
-    L->>L: create_task("Debate: ...")
+    L->>L: create_task(Debate topic)
 
     Note over L,J: Spawn (all run concurrently)
     L->>F: spawn_teammate
@@ -154,11 +163,11 @@ sequenceDiagram
         J->>J: read_inbox (polling...)
     end
 
-    Note over F,J: Final positions → judge (NOT lead)
+    Note over F,J: Final positions to judge (NOT lead)
     F->>J: send_message (final position)
     A->>J: send_message (final position)
 
-    Note over J,L: Verdict → lead
+    Note over J,L: Verdict to lead
     J->>L: send_message (FOR summary + AGAINST summary + verdict)
 
     Note over L,J: Shutdown (cooperative)
