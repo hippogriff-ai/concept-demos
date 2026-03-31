@@ -138,7 +138,7 @@ sequenceDiagram
     participant J as Judge
 
     Note over L: Setup
-    L->>L: create_task("Debate: ...")
+    L->>L: create_task(Debate topic)
 
     Note over L,J: Spawn (all run concurrently)
     L->>F: spawn_teammate
@@ -154,11 +154,11 @@ sequenceDiagram
         J->>J: read_inbox (polling...)
     end
 
-    Note over F,J: Final positions → judge (NOT lead)
+    Note over F,J: Final positions to judge (NOT lead)
     F->>J: send_message (final position)
     A->>J: send_message (final position)
 
-    Note over J,L: Verdict → lead
+    Note over J,L: Verdict to lead
     J->>L: send_message (FOR summary + AGAINST summary + verdict)
 
     Note over L,J: Shutdown (cooperative)
