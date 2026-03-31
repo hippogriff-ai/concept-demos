@@ -19,6 +19,13 @@ TRACE = False
 TG = None  # task group for concurrent teammate spawning
 INBOX_MTIME = {}  # owner -> last seen mtime, for poll-based inbox reads
 now = lambda: datetime.now(timezone.utc).isoformat()
+text_result = lambda t: {"content": [{"type": "text", "text": t}]}
+
+def set_member_status(name, status):
+    cfg = json.loads(CONFIG.read_text())
+    for m in cfg["members"]:
+        if m["name"] == name: m["status"] = status
+    CONFIG.write_text(json.dumps(cfg, indent=2))
 
 
 def trace(icon, path, detail):
@@ -57,18 +64,13 @@ def make_shared_tools(owner):
         LOG.append(msg)
         if msg_type == "shutdown_request":
             trace("🛑", path, f"shutdown_request → {args['recipient']}")
-            # Update config status
-            cfg = json.loads(CONFIG.read_text())
-            for m in cfg["members"]:
-                if m["name"] == args["recipient"]: m["status"] = "shutdown_requested"
-            CONFIG.write_text(json.dumps(cfg, indent=2))
+            set_member_status(args["recipient"], "shutdown_requested")
         else:
             trace("✉️ ", path, f"{owner} → {args['recipient']}: \"{args['summary'][:60]}\"")
-        return {"content": [{"type": "text", "text": f"Sent to {args['recipient']}"}]}
+        return text_result(f"Sent to {args['recipient']}")
 
     @tool("read_inbox", "Read your own inbox. Waits up to 30s for new messages if unchanged.", {})
     async def read_inbox(args):
-        # Hard constraint: agents can only read their OWN inbox.
         path = INBOXES / f"{owner}.json"
         if not path.exists(): path.write_text("[]")
         current_mtime = path.stat().st_mtime
@@ -92,7 +94,7 @@ def make_shared_tools(owner):
         detail = f"{owner} reads inbox: {content_count} message(s)"
         if shutdown_count: detail += f" + {shutdown_count} shutdown request(s)"
         trace("📬", path, detail)
-        return {"content": [{"type": "text", "text": json.dumps(msgs, indent=2) if msgs else "No messages."}]}
+        return text_result(json.dumps(msgs, indent=2) if msgs else "No messages.")
     return [send_message, read_inbox]
 
 
@@ -102,20 +104,19 @@ def make_task_tools(owner):
     # In real Claude Code teams, ALL agents can create, read, and update tasks.
     @tool("create_task", "Create a task for the team", {"subject": str})
     async def create_task(args):
-        # Highwatermark ensures unique IDs even under concurrent task creation.
         hw = TASKS / ".highwatermark"
         tid = int(hw.read_text()) + 1; hw.write_text(str(tid))
         t = {"id": tid, "subject": args["subject"], "status": "pending",
              "owner": None, "created_by": owner, "created_at": now()}
         (TASKS / f"{tid}.json").write_text(json.dumps(t, indent=2))
         trace("📋", TASKS / f"{tid}.json", f"task {tid} created: \"{args['subject'][:50]}\"")
-        return {"content": [{"type": "text", "text": f"Task {tid} created."}]}
+        return text_result(f"Task {tid} created.")
 
     @tool("read_tasks", "Read all tasks", {})
     async def read_tasks(args):
         tasks = [json.loads(f.read_text()) for f in sorted(TASKS.glob("*.json"))]
         trace("📋", TASKS, f"{owner} reads tasks: {len(tasks)} task(s)")
-        return {"content": [{"type": "text", "text": json.dumps(tasks, indent=2) if tasks else "No tasks."}]}
+        return text_result(json.dumps(tasks, indent=2) if tasks else "No tasks.")
 
     @tool("update_task", "Claim or complete a task", {"task_id": int, "status": str, "owner": str})
     async def update_task(args):
@@ -124,7 +125,7 @@ def make_task_tools(owner):
         t["status"], t["owner"] = args["status"], args["owner"]
         p.write_text(json.dumps(t, indent=2))
         trace("📝", p, f"task {args['task_id']}: status={args['status']}, owner={args['owner']}")
-        return {"content": [{"type": "text", "text": f"Task {args['task_id']} updated."}]}
+        return text_result(f"Task {args['task_id']} updated.")
     return [create_task, read_tasks, update_task]
 
 
@@ -138,19 +139,16 @@ def make_teammate_tools(owner):
                "approve": args["approve"], "reason": args["reason"], "ts": now()}
         lead = INBOXES / "lead.json"; msgs = json.loads(lead.read_text())
         msgs.append(msg); lead.write_text(json.dumps(msgs, indent=2)); LOG.append(msg)
-        cfg = json.loads(CONFIG.read_text())
-        for m in cfg["members"]:
-            if m["name"] == owner:
-                m["status"] = "shutdown_approved" if args["approve"] else "shutdown_rejected"
-        CONFIG.write_text(json.dumps(cfg, indent=2))
+        status = "shutdown_approved" if args["approve"] else "shutdown_rejected"
+        set_member_status(owner, status)
         verdict = "approved" if args["approve"] else f"rejected: {args['reason']}"
         trace("🛑", CONFIG, f"{owner} shutdown {verdict}")
         if args["approve"]:
             # Per real SendMessage docs: "Approving shutdown terminates your process."
             # The runtime hard-kills the teammate after approval. We can't do that from
             # inside a tool — we tell the LLM to stop. Close enough for the demo.
-            return {"content": [{"type": "text", "text": "Shutdown approved. Your process is terminating — do not call any more tools."}]}
-        return {"content": [{"type": "text", "text": f"Shutdown rejected: {args['reason']}. You may continue working."}]}
+            return text_result("Shutdown approved. Your process is terminating — do not call any more tools.")
+        return text_result(f"Shutdown rejected: {args['reason']}. You may continue working.")
     return [respond_to_shutdown]
 
 
@@ -201,7 +199,7 @@ def make_lead_tools():
         # Concurrent: teammate runs in background, returns to lead immediately.
         # In real Claude Code teams, Agent tool spawns a process and returns.
         TG.start_soon(run_teammate, name, args["system_prompt"])
-        return {"content": [{"type": "text", "text": f"{name} spawned and running in background. Check your inbox for their messages."}]}
+        return text_result(f"{name} spawned and running in background. Check your inbox for their messages.")
 
     # No send_shutdown tool — in real Claude Code teams, the lead uses SendMessage
     # with {type: "shutdown_request"} to request shutdown. Our send_message handles this
@@ -321,7 +319,8 @@ def forensic_audit():
     print("\nTASKS:")
     for f in sorted(TASKS.glob("*.json")):
         t = json.loads(f.read_text())
-        flag = " ⚠ STILL IN PROGRESS" if t["status"] in ("pending", "in_progress", "in-progress") else ""
+        done = t["status"] in ("done", "completed")
+        flag = "" if done else " ⚠ STILL IN PROGRESS"
         print(f"  Task {t['id']}: \"{t['subject'][:40]}\" — {t['status']}, owner: {t['owner']}{flag}")
     print("=" * 60)
 
