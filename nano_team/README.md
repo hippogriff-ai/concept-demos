@@ -128,19 +128,49 @@ Watch for:
 
 ## Architecture
 
-### Routing topology
+### Lifecycle
 
+```mermaid
+sequenceDiagram
+    participant L as Lead
+    participant F as teammate-for
+    participant A as teammate-against
+    participant J as Judge
+
+    Note over L: Setup
+    L->>L: create_task("Debate: ...")
+
+    Note over L,J: Spawn (all run concurrently)
+    L->>F: spawn_teammate
+    L->>A: spawn_teammate
+    L->>J: spawn_teammate
+
+    Note over F,A: Debate (via inbox files)
+    par debaters exchange arguments
+        F->>A: send_message (opening arguments)
+        A->>F: send_message (rebuttal)
+        F->>A: send_message (counter-rebuttal)
+    and judge waits
+        J->>J: read_inbox (polling...)
+    end
+
+    Note over F,J: Final positions → judge (NOT lead)
+    F->>J: send_message (final position)
+    A->>J: send_message (final position)
+
+    Note over J,L: Verdict → lead
+    J->>L: send_message (FOR summary + AGAINST summary + verdict)
+
+    Note over L,J: Shutdown (cooperative)
+    L->>F: send_message (shutdown_request)
+    L->>A: send_message (shutdown_request)
+    L->>J: send_message (shutdown_request)
+    F->>L: shutdown_response (approve)
+    A->>L: shutdown_response (approve)
+    J->>L: shutdown_response (approve)
 ```
-lead (spawns all, receives verdict)
-├── teammate-for ──→ judge     (final position)
-│       ↕ debate
-├── teammate-against ──→ judge (final position)
-└── judge ──→ lead             (verdict)
 
-Forbidden: teammate-for → lead, teammate-against → lead
-```
-
-The routing exists only in the prompts. The forensic audit checks it after the fact.
+**Routing constraint:** debaters send final positions to judge, never to lead directly. This is enforced only by prompts — `send_message` accepts any recipient. The forensic audit checks it after the fact.
 
 ### Filesystem layout
 
